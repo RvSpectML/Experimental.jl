@@ -1,0 +1,7 @@
+name = "Experimental"
+uuid = "c375db7c-bdfb-49f7-8950-8565dc609c5b"
+authors = ["Eric Ford"]
+version = "0.0.1"
+
+[compat]
+julia = "1.5"

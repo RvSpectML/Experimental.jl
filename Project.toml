@@ -3,5 +3,11 @@ uuid = "c375db7c-bdfb-49f7-8950-8565dc609c5b"
 authors = ["Eric Ford"]
 version = "0.0.1"
 
+[deps]
+EchelleCCFs = "5d9f57b1-d7b5-417c-8d79-eedbcaad0187"
+EchelleInstruments = "533b6e3a-cbf4-4a92-8a96-bc27ebcb1598"
+RvSpectMLBase = "c48404b2-35ea-40e7-ac7f-06a53de703d6"
+RvSpectMLPlots = "6ad363e8-653f-4efd-a04b-f033e69a984c"
+
 [compat]
 julia = "1.5"

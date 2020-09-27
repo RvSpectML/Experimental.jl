@@ -1,13 +1,13 @@
 module LineFinder
 
-using ..RvSpectML
+using RvSpectMLBase
 using DataFrames, Query
 using Statistics
 using LsqFit
 #using Optim
 #using Plots
 #using ThreadedIterables
-using ..TemporalGPInterpolation
+#using ..TemporalGPInterpolation
 
 
 default_min_deriv2 = 3 # 1.5e5

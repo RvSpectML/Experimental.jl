@@ -32,5 +32,5 @@ export interp_chunk_to_grid_gp_brute_force, interp_chunk_to_grid_gp_brute_force!
 
 include("gp_fast/temporalgps.jl")    # Dependenacies on Stheno, Temporal GPs and Static Arrays
 import .TemporalGPInterpolation
-export interp_chunk_to_shifted_grid_temporalgp, interp_chunk_to_shifted_grid_temporalgp!
-export interp_chunk_to_grid_temporalgp, interp_chunk_to_grid_temporalgp!
+export interp_chunk_to_shifted_grid_gp_temporal, interp_chunk_to_shifted_grid_gp_temporal!
+export interp_chunk_to_grid_gp_temporal, interp_chunk_to_grid_gp_temporal!

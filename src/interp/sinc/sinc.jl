@@ -12,7 +12,7 @@ module SincInterpolation
 
 using Base.Math
 using DSP
-#using Interpolations
+using Interpolations
 using RvSpectMLBase
 #import ..RvSpectML: searchsortednearest
 

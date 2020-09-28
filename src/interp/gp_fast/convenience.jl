@@ -86,7 +86,7 @@ function interp_chunk_to_grid_gp_temporal!( flux_out::AA1, var_out::AA2, chunk::
 
     flux_out .= TemporalGPInterpolation.predict_mean(chunk.λ, y_to_use, grid, sigmasq_obs = var_to_use, use_logx=use_logx, use_logy=use_logy, smooth_factor=smooth_factor )
     # TODO: Update var_out to actually use the right GP
-    var_out .= TemporalGPInterpolation.predict_mean(chunk.λ, var, grid, sigmasq_obs = var_to_use, use_logx=use_logx, use_logy=use_logy, smooth_factor=smooth_factor )
+    var_out .= TemporalGPInterpolation.predict_mean(chunk.λ, var_to_use, grid, sigmasq_obs = var_to_use, use_logx=use_logx, use_logy=use_logy, smooth_factor=smooth_factor )
     if !use_logy
         flux_out .= mean_y.*(flux_out.+1.0)
         var_out .*= mean_y^2

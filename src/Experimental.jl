@@ -4,6 +4,7 @@ using EchelleInstruments
 using EchelleCCFs
 using DataFrames, Query
 using Dates
+using Statistics
 
 CCFs = EchelleCCFs
 
@@ -20,9 +21,10 @@ export predict_mean, predict_deriv, predict_deriv2, predict_mean_and_deriv, pred
 include("line_finder/line_finder.jl")
 export LineFinderPlan
 
-#include("alg/make_template_spectrum.jl")
+include("alg/project_flux_common_wavelengths.jl")
+include("alg/make_template_spectrum.jl")
+
 #include("alg/dcpca.jl")
-#include("alg/project_flux_common_wavelengths.jl")
 #include("alg/ppcca.jl")
 #include("alg/rvs_from_gp_pairs.jl")
 end

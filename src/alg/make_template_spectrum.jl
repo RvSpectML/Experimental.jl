@@ -1,4 +1,7 @@
 
+function make_grids_for_chunklist_timeseries(clt::ACLT; oversample_factor::Real = 1 ) where { ACLT<:AbstractChunkListTimeseries }
+    map(i->RvSpectMLBase.make_grid_for_chunk(clt,i,oversample_factor=oversample_factor), 1:num_chunks(clt))
+end
 
 # Wrapper code to deal with weird data structures
 function pack_chunk_list_timeseries_to_matrix(timeseries::ACLT, chunk_grids::Union{AR,AAV}; alg::Symbol = :TemporalGP,
@@ -38,13 +41,13 @@ function pack_chunk_list_timeseries_to_matrix(timeseries::ACLT, chunk_grids::Uni
            mean_flux_in_chunk = mean(timeseries.chunk_list[t].data[c].flux)
            if mean_flux_in_chunk > 0
                if alg == :Linear
-                   interp_chunk_to_grid_linear!(view(flux_matrix,idx,t), view(var_matrix,idx,t), timeseries.chunk_list[t].data[c], chunk_grids[c])
+                   LinearInterpolation.interp_chunk_to_grid_linear!(view(flux_matrix,idx,t), view(var_matrix,idx,t), timeseries.chunk_list[t].data[c], chunk_grids[c])
                elseif alg == :Sinc
-                   interp_chunk_to_grid_sinc!(view(flux_matrix,idx,t), view(var_matrix,idx,t), timeseries.chunk_list[t].data[c], chunk_grids[c], Filter=sinc_filter)
+                   SincInterpolation.interp_chunk_to_grid_sinc!(view(flux_matrix,idx,t), view(var_matrix,idx,t), timeseries.chunk_list[t].data[c], chunk_grids[c], Filter=sinc_filter)
                elseif alg == :GP
-                   interp_chunk_to_grid_gp!(view(flux_matrix,idx,t), view(var_matrix,idx,t), timeseries.chunk_list[t].data[c], chunk_grids[c])
+                   GPInterpolation.interp_chunk_to_grid_gp!(view(flux_matrix,idx,t), view(var_matrix,idx,t), timeseries.chunk_list[t].data[c], chunk_grids[c])
                elseif alg == :TemporalGP
-                   interp_chunk_to_grid_gp_temporal!(view(flux_matrix,idx,t), view(var_matrix,idx,t), timeseries.chunk_list[t].data[c], chunk_grids[c] , use_logx=true, use_logy=false, smooth_factor=smooth_factor)
+                   TemporalGPInterpolation.interp_chunk_to_grid_gp_temporal!(view(flux_matrix,idx,t), view(var_matrix,idx,t), timeseries.chunk_list[t].data[c], chunk_grids[c] , use_logx=true, use_logy=false, smooth_factor=smooth_factor)
                end
                mean_flux[idx] .+= flux_matrix[idx,t]
                mean_var[idx]  .+= var_matrix[idx,t]
@@ -86,7 +89,7 @@ function pack_chunk_list_timeseries_to_matrix(timeseries::ACLT, chunk_grids::Uni
     #mean_flux /= num_obs
     mean_var .*= sqrt(oversample_factor)
     #dmeanfluxdlnλ ./= num_obs
-    return ( matrix=SpectralTimeSeriesCommonWavelengths(λ_vec,flux_matrix,var_matrix,chunk_map, Generic1D() ), mean_flux=mean_flux, mean_var=mean_var, deriv=dfluxdlnλ, deriv2=d2fluxdlnλ2 )
+    return ( matrix=SpectralTimeSeriesCommonWavelengths(λ_vec,flux_matrix,var_matrix,chunk_map, TheoreticalInstrument1D() ), mean_flux=mean_flux, mean_var=mean_var, deriv=dfluxdlnλ, deriv2=d2fluxdlnλ2 )
 end
 
 
@@ -132,13 +135,13 @@ function pack_shifted_chunk_list_timeseries_to_matrix(timeseries::ACLT, chunk_gr
            if mean_flux_in_chunk > 0
                #println(" mean flux in chunk ", c, " at time ", t, " = ", mean_flux_in_chunk)
                if alg == :Linear
-                   interp_chunk_to_shifted_grid_linear!(view(flux_matrix,idx,t), view(var_matrix,idx,t), timeseries.chunk_list[t].data[c], chunk_grids[c], boost_factor )
+                   LinearInterpolation.interp_chunk_to_shifted_grid_linear!(view(flux_matrix,idx,t), view(var_matrix,idx,t), timeseries.chunk_list[t].data[c], chunk_grids[c], boost_factor )
                elseif alg == :Sinc
-                   interp_chunk_to_shifted_grid_sinc!(view(flux_matrix,idx,t), view(var_matrix,idx,t), timeseries.chunk_list[t].data[c], chunk_grids[c], boost_factor, Filter=sinc_filter )
+                   SincInterpolation.interp_chunk_to_shifted_grid_sinc!(view(flux_matrix,idx,t), view(var_matrix,idx,t), timeseries.chunk_list[t].data[c], chunk_grids[c], boost_factor, Filter=sinc_filter )
                elseif alg == :GP
-                   interp_chunk_to_shifted_grid_gp!(view(flux_matrix,idx,t), view(var_matrix,idx,t), timeseries.chunk_list[t].data[c], chunk_grids[c], boost_factor)
+                   GPInterpolation.interp_chunk_to_shifted_grid_gp!(view(flux_matrix,idx,t), view(var_matrix,idx,t), timeseries.chunk_list[t].data[c], chunk_grids[c], boost_factor)
                elseif alg == :TemporalGP
-                   interp_chunk_to_shifted_grid_gp_temporal!(view(flux_matrix,idx,t), view(var_matrix,idx,t), timeseries.chunk_list[t].data[c], chunk_grids[c], boost_factor, use_logx=true, use_logy=false, smooth_factor=smooth_factor)
+                   TemporalGPsInterpolation.interp_chunk_to_shifted_grid_gp_temporal!(view(flux_matrix,idx,t), view(var_matrix,idx,t), timeseries.chunk_list[t].data[c], chunk_grids[c], boost_factor, use_logx=true, use_logy=false, smooth_factor=smooth_factor)
                end
                if t == 1
                   λ_vec[idx] .= chunk_grids[c]
@@ -186,7 +189,7 @@ function pack_shifted_chunk_list_timeseries_to_matrix(timeseries::ACLT, chunk_gr
     #mean_flux /= num_obs
     mean_var .*= sqrt(oversample_factor)
     #dmeanfluxdlnλ ./= num_obs
-    return ( matrix=SpectralTimeSeriesCommonWavelengths(λ_vec,flux_matrix,var_matrix,chunk_map, Generic1D() ), mean_flux=mean_flux, mean_var=mean_var, deriv=dfluxdlnλ, deriv2=d2fluxdlnλ2 )
+    return ( matrix=SpectralTimeSeriesCommonWavelengths(λ_vec,flux_matrix,var_matrix,chunk_map, TheoreticalInstrument1D() ), mean_flux=mean_flux, mean_var=mean_var, deriv=dfluxdlnλ, deriv2=d2fluxdlnλ2 )
 end
 
 """   repack_flux_vector_to_chunk_matrix(λ, flux, var, chunk_map, λc; alg )
@@ -224,14 +227,14 @@ function repack_flux_vector_to_chunk_matrix(λ::AA1, flux::AA2, var::AA3, chunk_
        Δλ = Δv /RvSpectML.speed_of_light_mps*λc[c]
        if mean_flux_in_chunk > 0
            if alg == :Linear
-               interp_chunk_to_grid_linear!(view(flux_matrix,:,c), view(var_matrix,:,c), chunk_of_spectrum, chunk_grid)
+               LinearInterpolation.interp_chunk_to_grid_linear!(view(flux_matrix,:,c), view(var_matrix,:,c), chunk_of_spectrum, chunk_grid)
            elseif alg == :Sinc
                chunk_grid = range(λc[c]-(num_λ_per_chunk-1)//2*Δλ, stop=λc[c]+(num_λ_per_chunk-1)//2*Δλ, length=num_λ_per_chunk )
-               interp_chunk_to_grid_sinc!(view(flux_matrix,:,c), view(var_matrix,:,c), chunk_of_spectrum, chunk_grid, Filter=sinc_filter)
+               SincInterpolation.interp_chunk_to_grid_sinc!(view(flux_matrix,:,c), view(var_matrix,:,c), chunk_of_spectrum, chunk_grid, Filter=sinc_filter)
            elseif alg == :GP
-               interp_chunk_to_grid_gp!(view(flux_matrix,:,c), view(var_matrix,:,c), chunk_of_spectrum, chunk_grid)
+               GPInterpolation.interp_chunk_to_grid_gp!(view(flux_matrix,:,c), view(var_matrix,:,c), chunk_of_spectrum, chunk_grid)
            elseif alg == :TemporalGP
-               interp_chunk_to_grid_gp_temporal!(view(flux_matrix,:,c), view(var_matrix,:,c), chunk_of_spectrum, chunk_grid , use_logx=true, use_logy=false, smooth_factor=smooth_factor)
+               TemporalGPsInterpolation.interp_chunk_to_grid_gp_temporal!(view(flux_matrix,:,c), view(var_matrix,:,c), chunk_of_spectrum, chunk_grid , use_logx=true, use_logy=false, smooth_factor=smooth_factor)
            end
        else  # no flux in chunk?!?
            @warn "No flux in chunk " * string(c) * " at time " * string(t) * "."
@@ -264,5 +267,5 @@ function repack_flux_vector_to_chunk_matrix(λ::AA1, flux::AA2, var::AA3, chunk_
     #mean_flux /= num_obs
     #mean_var .*= sqrt(oversample_factor)
     #dmeanfluxdlnλ ./= num_obs
-    #return flux ( matrix=SpectralTimeSeriesCommonWavelengths(λ_vec,flux_matrix,var_matrix,chunk_map, Generic1D() ), mean_flux=mean_flux, mean_var=mean_var, deriv=dfluxdlnλ, deriv2=d2fluxdlnλ2 )
+    #return flux ( matrix=SpectralTimeSeriesCommonWavelengths(λ_vec,flux_matrix,var_matrix,chunk_map, TheoreticalInstrument1D() ), mean_flux=mean_flux, mean_var=mean_var, deriv=dfluxdlnλ, deriv2=d2fluxdlnλ2 )
 end

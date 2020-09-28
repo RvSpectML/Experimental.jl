@@ -10,10 +10,10 @@ function prepare_line_list_pass1( linelist_fn::String, all_spectra::AbstractVect
       if verbose println("# Reading line list for CCF: ", linelist_fn, ".")  end
       espresso_filename = joinpath(pkgdir(EchelleCCFs),"data","masks",linelist_fn)
       espresso_df = EchelleCCFs.read_linelist_espresso(espresso_filename)
-      #inst_module = RvSpectML.get_inst_module(typeof(first(all_spectra).inst))
+      inst_module = get_inst_module(first(all_spectra).inst)
       #line_list_df = EXPRES.filter_line_list(espresso_df,first(all_spectra).inst)
-      line_list_df = EXPRES.filter_line_list(espresso_df,first(all_spectra).inst)
-      println(line_list_df)
+      line_list_df = inst_module.filter_line_list(espresso_df,first(all_spectra).inst)
+      #println(line_list_df)
       if eltype(all_spectra) <: AnyEXPRES
          RvSpectMLBase.discard_pixel_mask(all_spectra)
          RvSpectMLBase.discard_excalibur_mask(all_spectra)

@@ -1,24 +1,4 @@
 """
-   Module for performing Sinc interpolation
-From
-https://github.com/christiangil/GP-Research/blob/master/julia/src/interpolation_functions.jl
-https://github.com/christiangil/GP-Research/blob/master/julia/src/general_functions.jl
-
-Authors: Joe Ninan (original)
-         Christian Gilbertson (Converted to Julia and optimized)
-         Eric Ford (Further adapted/optimizations)
-"""
-module SincInterpolation
-
-using Base.Math
-using DSP
-using Interpolations
-using ..RvSpectML
-#import ..RvSpectML: searchsortednearest
-
-export spectra_interpolate
-
-"""
 Original author: Joe Ninan
 Converted to Julia and optimized by Christian Gilbertson & Eric Ford
 Returns a cubit interpolator for windowed sinc Filter curve.
@@ -93,7 +73,7 @@ function spectra_interpolate(
     # First generate a 2D array of difference in pixel values
     # OldXminusNewX = np.array(oldX)[:,np.newaxis] - np.array(newX)
     # Find the minimum position to find nearest pixel for each each newX
-	minargs = RvSpectML.searchsortednearest(oldX, newX)
+	minargs = RvSpectMLBase.searchsortednearest(oldX, newX)
     # Pickout the those minumum values from 2D array
 	minvalues = oldX[minargs] - newX
 	Nminargs = next_min_arg.(minargs,minvalues,length(oldX))
@@ -131,6 +111,3 @@ function spectra_interpolate(
 	#return vec(sum(OldYSlices .* FilterValues, dims=2))
 	return vec(sum(oldY[OldYCoords] .* FilterValues, dims=2))
 end
-
-
-end # module

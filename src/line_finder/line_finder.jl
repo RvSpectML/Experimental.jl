@@ -1,6 +1,6 @@
 module LineFinder
 
-using ..RvSpectML
+using RvSpectMLBase
 using DataFrames, Query
 using Statistics
 using LsqFit
@@ -16,6 +16,7 @@ default_min_pixels_in_line = 5
 default_use_logλ = true
 default_use_logflux = false
 
+" Struct containing parameters for running LineFinder "
 struct LineFinderPlan
   min_deriv2::Float64
   smooth_factor::Float64
@@ -24,19 +25,30 @@ struct LineFinderPlan
   use_logflux::Bool
 end
 
+""" Create a [LineFinderPlan](@ref)
+Optional Inputs:
+- min_deriv2 (default_min_deriv2)
+- smooth_factor (default_smooth_factor)
+- min_pixels_in_line (default_min_pixels_in_line)
+- use_logλ (default_use_logλ),
+- use_logflux (default_use_logflux)
+"""
 function LineFinderPlan(; min_deriv2::Real = default_min_deriv2, smooth_factor::Real = default_smooth_factor,
                           min_pixels_in_line::Int = default_min_pixels_in_line,
                           use_logλ::Bool = default_use_logλ, use_logflux::Bool = default_use_logflux )
   LineFinderPlan(min_deriv2, smooth_factor, min_pixels_in_line, use_logλ, use_logflux)
 end
 
-"""  find_lines_candidates_in_chunk( chunk, plan )
+"""  `find_lines_candidates_in_chunk( chunk, plan )`
 Convenience function to find links in one chunk of spectrum.
 # Inputs:
-- chunk
+- chunk: ChunkOfSpectrum to be analyzed
+- deriv2: array of second derivative with respect to log λ
 # Optional Arguments:
-# Return:
-- array of ranges of pixels wihtin chunk
+- plan: LineFinderPlan
+# Returns DataFrame containing keys:
+- pixels: array of ranges of pixels wihtin chunk
+- pixel_max_d2fdlnλ2: pixel with maximum 2nd derivative
 """
 function find_line_candidates_in_chunk(chunk::AbstractChunkOfSpectrum, deriv2::AbstractVector{T}; plan::LineFinderPlan = LineFinderPlan() ) where { T<:Real }
   idx_d2_gt_0 = findall(d2->isless(zero(d2),d2), deriv2)
@@ -71,14 +83,21 @@ function find_line_candidates_in_chunk(chunk::AbstractChunkOfSpectrum, deriv2::A
   #return line_candidates
 end
 
-# Utility functions for fitting.  Don't assume will remain unchanged in future versions.
+" Utility function for `line_model`.  Don't assume will remain unchanged in future versions."
 function pack(; a::T1, b::T2, λc::T3, depth::T4, σ²::T5) where { T1<:Real, T2<:Real, T3<:Real, T4<:Real, T5<:Real  }
   return [a, λc-6500, log(depth), log(σ²), b]
 end
+
+" Utility function for `line_model`.  Don't assume will remain unchanged in future versions."
 function unpack(θ::AbstractVector{T} ) where {T<:Real}
   return (a=θ[1], λc=θ[2]+6500, depth=exp(θ[3]), σ²=exp(θ[4]), b=θ[5]  )
 end
 
+""" `line_model( λ, θ )`
+Calculate model for one Gaussian absorption line evaluated at wavelengths λ
+Input is an array that will be passed to [unpack](@ref).
+Currently assumed to be chunk normalization, central wavelength, depth, σ² and slope of normalization within chunk.
+"""
 function line_model(λ::Union{T1,AbstractVector{T1} }, θ::AbstractVector{T2}) where { T1<:Real, T2<:Real}
   a, λc, d, σ², b = unpack(θ)
   return @. a*(1.0+b*(λ-λc))*(1.0 - d * exp(-0.5*(λ-λc)^2 /σ²) )
@@ -160,15 +179,20 @@ Convenience function to find lines in one chunk of spectrum.
 # Inputs:
 - chunk
 # Optional Arguments:
+- plan: LineFinderPlan
+- chunk_id: If provide non-zero values, then add column `chunk_id` to resulting DataFrame
+- obs_id: If provide non-zero values, then add column `obs_id` to resulting DataFrame
+- keep_bad_fits:  If true, then does not filter out non-converged and other bad line fits from resulting dataframe
+- verbose: If true, prints extra debugging info.
 # Return:
-- line_fit_list
+- line_fit_list:  DataFrame with results of fit to each line
 """
 function find_lines_in_chunk(chunk::AbstractChunkOfSpectrum; plan::LineFinderPlan = LineFinderPlan(),
                               chunk_id::Integer = 0, obs_id::Integer = 0, keep_bad_fits::Bool = false, verbose::Bool = false) where {T <:Real}
 
   function fit_line(idx::UnitRange)
     #RvSpectML.LineFinder.fit_line(view(chunk.λ,idx), view(flux,idx), view(chunk.var, idx) )   # some bug in this version of function causes non-convergence
-    RvSpectML.LineFinder.fit_line( chunk.λ, flux, chunk.var, idx)
+    LineFinder.fit_line( chunk.λ, flux, chunk.var, idx)
   end
   norm_in_chunk = mean(chunk.flux)
   @assert 0.9<=norm_in_chunk<=1.1  # Just making sure we're passing roughly normalized chunks
@@ -228,28 +252,40 @@ Convenience function to find lines in each chunk of a spectrum.
 # Inputs:
 - chunklist
 # Optional Arguments:
+- plan:  LineFinderPlan
+- keep_bad_fits:  If true, then does not filter out non-converged and other bad line fits from resulting dataframe
+- verbose: If true, prints extra debugging info.
 # Return:
-- line_list
+- line_list: DataFrame results of fit to each line
 """
-function find_lines_in_chunklist(chunk_list::AbstractChunkList ; obs_id::Integer = 0, plan::LineFinderPlan = LineFinderPlan() )
-  mapreduce(i->find_lines_in_chunk(chunk_list[i], plan=plan, chunk_id=i, obs_id=obs_id), append!, 1:length(chunk_list) )
+function find_lines_in_chunklist(chunk_list::AbstractChunkList ; obs_id::Integer = 0, plan::LineFinderPlan = LineFinderPlan(), keep_bad_fits::Bool = false, verbose::Bool = false )
+  mapreduce(i->find_lines_in_chunk(chunk_list[i], plan=plan, chunk_id=i, obs_id=obs_id, keep_bad_fits=keep_bad_fits, verbose=verbose ), append!, 1:length(chunk_list) )
 end
 
-"""  find_lines_in_chunklist_timeseries( chunklist_timeseries, line_list )
+"""  `find_lines_in_chunklist_timeseries( chunklist_timeseries, line_list )`
 Convenience function to find lines in each chunk of each spectrum in a timeseries.
 # Inputs:
 - chunklist_timeseries
 # Optional Arguments:
+- plan:  LineFinderPlan
+- keep_bad_fits:  If true, then does not filter out non-converged and other bad line fits from resulting dataframe
+- verbose: If true, prints extra debugging info.
 # Return:
-- line_list
-
+- line_list: Array of results from [find_lines_in_chunklist](@ref)
 """
-function find_lines_in_chunklist_timeseries(clt::AbstractChunkListTimeseries ; plan::LineFinderPlan = LineFinderPlan() )
+function find_lines_in_chunklist_timeseries(clt::AbstractChunkListTimeseries ; plan::LineFinderPlan = LineFinderPlan(), keep_bad_fits::Bool = false, verbose::Bool = false  )
     #@threaded
-    map(cl->find_lines_in_chunklist(clt.chunk_list[cl], obsid=cl, plan=plan),1:num_obs(clt))
+    map(cl->find_lines_in_chunklist(clt.chunk_list[cl], obsid=cl, plan=plan, keep_bad_fits=keep_bad_fits, verbose=verbose ),1:num_obs(clt))
 end
 
-
+""" `find_pixels_for_all_lines_in_chunklist( chunk_list, lines)`
+Return array giving range of pixels for each line within provided chunklist
+Inputs:
+- chunk_list
+- lines: DataFrame containing keys: `:fit_min_λ`, `:fit_max_λ`, `:chunk_id`
+Output:
+- Vector of pixel ranges
+"""
 function find_pixels_for_all_lines_in_chunklist( chunk_list::AbstractChunkList, lines::DataFrame)
   @assert hasproperty(lines,:fit_min_λ)
   @assert hasproperty(lines,:fit_max_λ)
@@ -258,6 +294,27 @@ function find_pixels_for_all_lines_in_chunklist( chunk_list::AbstractChunkList, 
 end
 
 global fit_line_in_chunklist_timeseries_count_msgs = 0
+
+""" `fit_line_in_chunklist_timeseries( chunk_list_timeseries, λmin, λmax, chunk_index)`
+Return DataFrame with results of fits to each line in a given chunk of chunk_list_timeseries (including each observation time)
+Inputs:
+- chunk_list_timeseries: Data to fit
+- λmin
+- λmax
+- chunk_index:  Restricts fitting to specified chunk
+Outputs a DataFrame with keys:
+- fit_a: Normalization of continuum around line
+- fit_λc: Central wavelength
+- fit_depth: Line depth
+- fit_σ²:
+- fit_b: Slope of continuum around line
+- fit_covar: Covariance matrix for fit parameters
+- χ²_per_dof: quality of fit to chunk
+- fit_converged: Bool indicating if `LsqFit` converged
+- obs_idx: index of observation in chunk_list_timeseries
+- chunk_id: index of chunk in chunk_list_timeseries
+- pixels: range of pixels that was fit
+"""
 function fit_line_in_chunklist_timeseries(clt::AbstractChunkListTimeseries, λmin::Real, λmax::Real, chid::Integer; show_trace::Bool = false)
   df = DataFrame()
   nobs = length(clt.chunk_list)
@@ -274,7 +331,7 @@ function fit_line_in_chunklist_timeseries(clt::AbstractChunkListTimeseries, λmi
   gof = zeros(nobs)
   global count_msgs
   for t in 1:nobs
-    pixels[t] = RvSpectML.find_pixels_for_line_in_chunklist(clt.chunk_list[t], λmin, λmax, chid).pixels
+    pixels[t] = RvSpectMLBase.find_pixels_for_line_in_chunklist(clt.chunk_list[t], λmin, λmax, chid).pixels
     mean_flux = mean(clt.chunk_list[t][chid].flux[pixels[t]])
     flux = clt.chunk_list[t][chid].flux ./ mean_flux
     var = clt.chunk_list[t][chid].var ./ mean_flux^2
@@ -308,6 +365,26 @@ function fit_line_in_chunklist_timeseries(clt::AbstractChunkListTimeseries, λmi
 end
 
 
+""" `fit_line_in_chunklist_timeseries( chunk_list_timeseries, λmin, λmax )`
+Return DataFrame with results of fits to each line in a chunk_list_timeseries (including each observation time)
+Inputs:
+- chunk_list_timeseries: Data to fit
+- λmin
+- λmax
+- chunk_index:  Restricts fitting to specified chunk
+Outputs a DataFrame with keys:
+- fit_a: Normalization of continuum around line
+- fit_λc: Central wavelength
+- fit_depth: Line depth
+- fit_σ²:
+- fit_b: Slope of continuum around line
+- fit_covar: Covariance matrix for fit parameters
+- χ²_per_dof: quality of fit to chunk
+- fit_converged: Bool indicating if `LsqFit` converged
+- obs_idx: index of observation in chunk_list_timeseries
+- chunk_id: index of chunk in chunk_list_timeseries
+- pixels: range of pixels that was fit
+"""
 function fit_all_lines_in_chunklist_timeseries(clt::AbstractChunkListTimeseries, lines::DataFrame ; plan::LineFinderPlan = LineFinderPlan(), show_trace::Bool = false )
   @assert size(lines,1) >= 2
   line_idx::Int64 = 1
@@ -328,9 +405,13 @@ function fit_all_lines_in_chunklist_timeseries(clt::AbstractChunkListTimeseries,
 end
 
 
-# Patterned after find_worst_telluric_in_each_chunk in src/instruments/tellurics.jl
+""" `find_worst_telluric_in_each_line_fit!( df, clt, data)`
+Patterned after find_worst_telluric_in_each_chunk in src/instruments/tellurics.jl
+TODO: Move into EXPRES namespace?
+"""
 function find_worst_telluric_in_each_line_fit!( df::DataFrame, clt::AbstractChunkListTimeseries, data::AbstractArray{AS,1} )  where {AS<:AbstractSpectra}
   @assert hasproperty(df,:line_id)
+  @warn "find_worst_telluric_in_each_line_fit! will likely be moved soon"
   min_telluric_model_this_obs = ones(size(df,1))
   min_telluric_model_all_obs  = ones(size(df,1))
   for (i, row) in enumerate(eachrow(df))

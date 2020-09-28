@@ -1,23 +1,3 @@
-"""
-Author: Eric Ford
-Adapted from: https://github.com/eford/RvSpectraKitLearn.jl/blob/master/src/deriv_spectra_gp.jl
-
-Uses brute-force, but could update GaussianProcesses.jl, Stheno.jl, TemporalGPs., KernelFunctions.jl, etc.
-Note:  If make faster version using pacakge(s) that take advantage of specific kernels,
-       please keep this around since it gets the job done with has minimal dependancies.
-"""
-
-"""
-Module for interpolating via Gaussian Process Regression.
-"""
-module GPInterpolation
-using PDMats
-using LinearAlgebra
-using ..RvSpectML
-
-export make_kernel_data, make_kernel_obs_pred, gp_marginal
-export predict_mean, predict_deriv, predict_deriv2, predict_mean_and_deriv, predict_mean_and_derivs
-
 include("gp_brute_force_kernels.jl")
 
 function make_kernel_data(x::AA1, kernel::Function; sigmasq_obs::AA2 = zeros(length(x)), sigmasq_cor::Real=1.0, rho::Real=1.0)  where { T1<:Real, AA1<:AbstractArray{T1,1},  T2<:Real, AA2<:AbstractArray{T2,1} }
@@ -213,5 +193,3 @@ function test_gp_deriv()
   #plot(lambda_pred,df2,"m-")
 end
 =#
-
-end

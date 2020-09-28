@@ -11,60 +11,14 @@ function calc_mean_spectrum(flux::AbstractArray{T1,2}, var::AbstractArray{T2,2} 
     flux_mean = vec(sum(flux./var,dims=2)./sum(1.0./var,dims=2))
 end
 
-""" Estimate numerical derivative of fluxes given wavelengths. """
-function calc_dfluxdlnlambda(flux::AbstractArray{T1,1}, λ::AbstractArray{T2,1}) where { T1<:Real, T2<:Real }
-    @assert size(flux) == size(λ)
-    @assert length(flux) >= 3
-    dfdlogλ = Array{T1,1}(undef,length(flux))
-    calc_dfluxdlnlambda!(dfdlogλ,flux,λ)
-    #dfdlogλ[1] = 0.5 * (flux[2]-flux[1])/(λ[2]-λ[1])*(λ[2]+λ[1])
-    #dfdlogλ[2:end-1] .= 0.5 .* (flux[3:end].-flux[1:end-2])./(λ[3:end].-λ[1:end-2]).*(λ[3:end].+λ[1:end-2])
-    #dfdlogλ[end] = 0.5 * (flux[end]-flux[end-1])/(λ[end]-λ[end-1])*(λ[end]+λ[end-1])
-    return dfdlogλ
-end
-
-""" Estimate numerical derivative of fluxes given wavelengths. """
-function calc_dfluxdlnlambda!(dfdlogλ::AbstractArray{T1,1}, flux::AbstractArray{T2,1}, λ::AbstractArray{T3,1}) where { T1<:Real, T2<:Real, T3<:Real }
-    @assert size(flux) == size(λ)
-    @assert size(dfdlogλ) == size(flux)
-    @assert length(flux) >= 3
-    #dfdlogλ = Array{T1,1}(undef,length(flux))
-    dfdlogλ[1] = 0.5 * (flux[2]-flux[1])/(λ[2]-λ[1])*(λ[2]+λ[1])
-    dfdlogλ[2:end-1] .= 0.5 .* (flux[3:end].-flux[1:end-2])./(λ[3:end].-λ[1:end-2]).*(λ[3:end].+λ[1:end-2])
-    dfdlogλ[end] = 0.5 * (flux[end]-flux[end-1])/(λ[end]-λ[end-1])*(λ[end]+λ[end-1])
-    return dfdlogλ
-end
-
-""" Estimate numerical second derivative of fluxes given wavelengths. """
-function calc_d2fluxdlnlambda2(flux::AbstractArray{T1,1}, λ::AbstractArray{T2,1}) where { T1<:Real, T2<:Real }
-    @assert size(flux) == size(λ)
-    @assert length(flux) >= 3
-    logλ = log.(λ)
-    d2fdlogλ2 = Array{T1,1}(undef,length(flux))
-    #d2fdlogλ2[2:end-1] .= 0.25*(flux[3:end].+flux[1:end-2].-2.0.*flux[2:end-1])./(λ[3:end].+λ[1:end-2].-2.0*λ[2:end-1]).*(λ[3:end].+λ[end-2]).^2
-    #d2fdlogλ2[2:end-1] .= 0.5 * (flux[3:end].+flux[1:end-2].-2.0.*flux[2:end-1]).* ((λ[3:end].+λ[1:end-2])./(logλ[3:end].-logλ[1:end-2])).^2
-    #d2fdlogλ2[end] = d2fdlogλ2[end-1]
-    #d2fdlogλ2[1] = d2fdlogλ2[2]
-    calc_d2fluxdlnlambda2!(d2fdlogλ2,flux,λ)
-    return d2fdlogλ2
-end
-
-""" Estimate numerical second derivative of fluxes given wavelengths. """
-function calc_d2fluxdlnlambda2!(d2fdlogλ2::AbstractArray{T1,1}, flux::AbstractArray{T1,1}, λ::AbstractArray{T2,1}) where { T1<:Real, T2<:Real, T3<:Real }
-    @assert size(flux) == size(λ)
-    @assert size(d2fdlogλ2) == size(flux)
-    @assert length(flux) >= 3
-    #logλ = log.(λ)
-    #d2fdlogλ2 = Array{T1,1}(undef,length(flux))
-    #d2fdlogλ2[2:end-1] .= 0.25*(flux[3:end].+flux[1:end-2].-2.0.*flux[2:end-1])./(λ[3:end].+λ[1:end-2].-2.0*λ[2:end-1]).*(λ[3:end].+λ[end-2]).^2
-    d2fdlogλ2[2:end-1] .= 0.5 * (flux[3:end].+flux[1:end-2].-2.0.*flux[2:end-1]).* ((λ[3:end].+λ[1:end-2]).^2 ./ (2.0.*log.(λ[3:end]./λ[1:end-2])))
-    d2fdlogλ2[end] = d2fdlogλ2[end-1]
-    d2fdlogλ2[1] = d2fdlogλ2[2]
-    return d2fdlogλ2
-end
-
-""" Return mean numerical derivative of fluxes based on a common set of wavelengths.
-    Inputs: flux & var (2d) and λ (1d)
+""" Return mean numerical derivative (dflux/dlnλ) based on a common set of wavelengths.
+Inputs:
+- flux (2d)
+- var (2d)
+- λ (1d)
+- chunk_map: Array of ranges specifying how each chunk maps into indexes of output derivative
+Output:
+- dflux/dlnλ: (1d)
  """
 function calc_mean_dfluxdlnlambda(flux::AbstractArray{T1,2}, var::AbstractArray{T1,2}, λ::AbstractArray{T3,1},
         chunk_map::AbstractArray{URT,1}) where
@@ -78,7 +32,16 @@ function calc_mean_dfluxdlnlambda(flux::AbstractArray{T1,2}, var::AbstractArray{
     return deriv
 end
 
-function calc_mean_d2fluxdlnlambda2(flux::AbstractArray{T1,2}, var::AbstractArray{T1,2}, λ::AbstractArray{T3,1},
+""" Return mean numerical derivative (d²flux/dlnλ²) based on a common set of wavelengths.
+Inputs:
+- flux (2d)
+- var (2d)
+- λ (1d)
+- chunk_map: Array of ranges specifying how each chunk maps into indexes of output derivative
+Output:
+- d²flux/dlnλ²: (1d)
+ """
+ function calc_mean_d2fluxdlnlambda2(flux::AbstractArray{T1,2}, var::AbstractArray{T1,2}, λ::AbstractArray{T3,1},
         chunk_map::AbstractArray{URT,1}) where
     { T1<:Real, T2<:Real, T3<:Real, URT<:AbstractUnitRange} #, RT<:AbstractRange }
     flux_mean = calc_mean_spectrum(flux,var)
@@ -90,6 +53,18 @@ function calc_mean_d2fluxdlnlambda2(flux::AbstractArray{T1,2}, var::AbstractArra
     return deriv2
 end
 
+""" `calc_rvs_from_taylor_expansion( spectra )`
+Inputs:
+- spectra: SpectralTimeSeriesCommonWavelengths
+Optional Arguments:
+- mean: mean spectrum
+- deriv: dmeanflux/dlnλ
+- idx: range of pixel indcies to use for calculation
+- equal_weight:  For now, spectra are equal weighted. (true)
+Output named pair:
+- rv: Vector of estimated radial velocities
+- σ_rv: Vector of uncertainties in rv estimates
+"""
 function calc_rvs_from_taylor_expansion(spectra::STS; mean::MT = calc_mean_spectrum(spectra),
                 deriv::DT = calc_mean_dfluxdlnlambda(spectra), idx::RT = 1:length(mean),
                 equal_weight::Bool = true ) where {
@@ -116,6 +91,9 @@ function calc_rvs_from_taylor_expansion(spectra::STS; mean::MT = calc_mean_spect
    return (rv=-vec(rv), σ_rv=vec(σ_rv))
 end
 
+""" `calc_rvs_from_taylor_expansion_alt( spectra )`
+Experimental version of [calc_rvs_from_taylor_expansion](@ref).
+"""
 function calc_rvs_from_taylor_expansion_alt(spectra::STS; mean::MT = calc_mean_spectrum(spectra),
                 deriv::DT = calc_mean_dfluxdlnlambda(spectra),
                 deriv2::DT = calc_d2fluxdlnlambda2(spectra), idx::RT = 1:length(mean),
@@ -146,7 +124,17 @@ function calc_rvs_from_taylor_expansion_alt(spectra::STS; mean::MT = calc_mean_s
    return (rv=-vec(rv), σ_rv=vec(σ_rv))
 end
 
-
+""" `calc_chunk_rvs_from_taylor_expansion( spectra )`
+Inputs:
+- spectra: SpectralTimeSeriesCommonWavelengths
+Optional Arguments:
+- mean: mean spectrum
+- deriv: dmeanflux/dlnλ
+- equal_weight:  For now, spectra are equal weighted. (true)
+Output named pair:
+- rv: Vector of vector of estimated radial velocities for each chunk
+- σ_rv: Vector of vector of uncertainties in rv estimates for each chunk
+"""
 function calc_chunk_rvs_from_taylor_expansion(spectra::STS; mean::MT = calc_mean_spectrum(spectra),
                 deriv::DT = calc_mean_dfluxdlnlambda(spectra),
                 equal_weight::Bool = false ) where {

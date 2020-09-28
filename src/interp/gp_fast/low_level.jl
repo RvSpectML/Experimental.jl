@@ -1,87 +1,92 @@
+
+""" `construct_gp_prior()`
+Returns a GP prior using a Matern 5/2 kernel and specified parameters
+Optional Inputs:
+- smooth_factor: Multiplies variance and length scale for GP kernel (1)
+- σ²: Variance for GP kernel (0.5)
+- l: length scale for GP kernel (5.8e-5)
 """
-Author: Eric Ford
-Adapted from: https://github.com/eford/RvSpectraKitLearn.jl/blob/master/src/deriv_spectra_gp.jl
-
-GPs using Stheno.jl, TemporalGPs., KernelFunctions.jl, etc.
-"""
-
-"""
-Module for interpolating via Gaussian Process Regression based on Stheno and TemporalGPs packages.
-"""
-module TemporalGPInterpolation
-using LinearAlgebra
-using PDMats
-using StaticArrays
-using Stheno, TemporalGPs
-using Dates
-using RvSpectMLBase
-
-#export make_kernel_data, make_kernel_obs_pred,
-export gp_marginal
-export predict_mean, predict_deriv, predict_deriv2, predict_mean_and_deriv, predict_mean_and_derivs
-
-import Stheno: AbstractGP
-import Distributions: AbstractMvNormal
-
-using Distributions
-const Fx_PosteriorType = Distribution{Multivariate,Continuous}
-
-function construct_gp(; smooth_factor::Real = 1 ) #xobs::AA1, yobs::AA2, xpred::AA3; #= kernel::Function = matern52_sparse_kernel, =# sigmasq_obs::AA4 = 1e-16*ones(length(xobs)) #=, sigmasq_cor::Real=1.0, rho::Real=1.0)  =#
-			#, use_logx::Bool = true, use_logy::Bool = true )   where {
-				#T1<:Real, AA1<:AbstractArray{T1,1}, T2<:Real, AA2<:AbstractArray{T2,1}, T3<:Real, AA3<:AbstractArray{T3,1}, T4<:Real, AA4<:AbstractArray{T4,1} }
-	#gp_param_default = [.1639394167390819, 0.01/5615] .* smooth_factor   # TODO Generalize.  Values fr fit to one order of one EXPRES spectra
-	#gp_param_default = [.1639394167390819, 0.01/5615 .* smooth_factor  ] # TODO Generalize.  Values fr fit to one order of one EXPRES spectra
-	#gp_param_default = [.1639394167390819, 0.14584100679829712/5615] .* smooth_factor   # TODO Generalize.  Values fr fit to one order of one EXPRES spectra
-	#println("smooth_factor = ",smooth_factor)
-	gp_param_default = [ 0.4890909216856761, 5.800274590507981e-5] .* smooth_factor   # TODO Generalize.  Values fr fit to one order of one EXPRES spectra
-	#gp_param_default = [ 0.4890909216856761, 5.800274590507981e-5 * smooth_factor ]
-	σ², l = gp_param_default
+function construct_gp_prior(; smooth_factor::Real = 1, σ²::Real = 0.5, l::Real = 5.8e-5)
+	σ² *= smooth
+	l *= smooth
 	k = σ² * stretch(Matern52(), 1 / l)
 	f_naive = GP(k, GPC())
 	#f = to_sde(f_naive)   # if develop issues with StaticArrays could revert to this
 	f = to_sde(f_naive, SArrayStorage(Float64))
 end
 
-function construct_gp_posterior(xobs::AA1, yobs::AA2, xpred::AA3; #= kernel::Function = matern52_sparse_kernel, =# sigmasq_obs::AA4 = 1e-16*ones(length(xobs)) #=, sigmasq_cor::Real=1.0, rho::Real=1.0)  =#
+#=
+function construct_gp_prior_kernel_param_as_vector(gp_param = [0.5, 5.8e-5 ])
+	σ², l = gp_param
+	k = σ² * stretch(Matern52(), 1 / l)
+	f_naive = GP(k, GPC())
+	#f = to_sde(f_naive)   # if develop issues with StaticArrays could revert to this
+	f = to_sde(f_naive, SArrayStorage(Float64))
+end
+=#
+
+""" `construct_gp_posterior(xobs, yobs, xpred; sigmasq_obs, use_logx, use_logy, smooth_factor, boost_factor )`
+Inputs:
+- xobs: x locations where data is provided
+- yobs: y values of data to condition on
+Optional Inputs:
+- sigmasq_obs: variances for y values being conditioned on
+- use_logx: If true, take log's of x values before fitting GP
+- use_logy: If true, perform log transform on y's
+- smooth_factor: scales GP hyperparameters so as to result in smoother GP posterior (1)
+- boost_factor: scales xobs by 1/boost_factor (1)
+Returns:
+- Posterior GP at locations xpred given training data
+"""
+function construct_gp_posterior(xobs::AA1, yobs::AA2; sigmasq_obs::AA4 = 1e-16*ones(length(xobs)) #=, sigmasq_cor::Real=1.0, rho::Real=1.0)  =#
 			, use_logx::Bool = true, use_logy::Bool = true, smooth_factor::Real = 1, boost_factor::Real = 1 )   where {
 				T1<:Real, AA1<:AbstractArray{T1,1}, T2<:Real, AA2<:AbstractArray{T2,1}, T3<:Real, AA3<:AbstractArray{T3,1}, T4<:Real, AA4<:AbstractArray{T4,1} }
-	f = construct_gp( smooth_factor=smooth_factor ) # xobs,yobs,xpred,sigmasq_obs=sigmasq_obs)
+	f = construct_gp_prior( smooth_factor=smooth_factor )
 	xobs_trans = use_logx ? log.(xobs./boost_factor) : xobs./boost_factor
     yobs_trans = use_logy ? log.(yobs) : yobs
     sigmasq_obs_trans = use_logy ? sigmasq_obs./yobs.^2 : sigmasq_obs
-	#=
-	if xobs == xpred
-		xpred_trans = xobs_trans
-	else
-    	xpred_trans = use_logx ? log.(xpred) : xpred
-	end
-	=#
 	fx = f(xobs_trans, sigmasq_obs_trans)
 	f_posterior = posterior(fx, yobs_trans )
 end
 
-function predict_gp(gp::AGP,  xpred::AA3, use_logx::Bool = true, use_logy::Bool = true )   where {
+""" predict_gp_mean_var(gp, xpred ; use_logx, use_logy)
+Inputs:
+- gp:
+- xpred: Locations to predict GP at
+Optional inputs:
+- use_logx: If true, apply log transform to xpred before evaluating GP
+- use_logy: If true, apply exp transform after evaluating GP
+Returns tuple with vector of means and variance of GP posterior at locations in xpred.
+"""
+function predict_gp_mean_var(gp::AGP,  xpred::AA3, use_logx::Bool = true, use_logy::Bool = true )   where {
 		AGP<:AbstractGP, T3<:Real, AA3<:AbstractArray{T3,1} }
-		m = mean.(gp(xpred))
-		s = sqrt.(var.(gp(xpred)))
-		return m, s
+		gp_post = use_log_x ? gp(log.(xpred)) : gp(xpred)
+		m = mean.(gp_post)
+		v = var.(gp_post)
+		if use_logy
+			m = exp.(m)
+			v .*= m.^2
+		end
+		return m, v
 end
 
-function predict_mean(gp::AGP ; use_logy::Bool = true )   where { AGP<:Fx_PosteriorType }
-	#xpred_trans = use_logx ? log.(xpred) : xpred
-	gp_marginals = marginals(gp) # (xpred_trans))
-	output = use_logy ? exp.(mean.(gp_marginals)) : mean.(gp_marginals)
+""" predict_gp_mean(gp, xpred ; use_logx, use_logy)
+Inputs:
+- gp:
+- xpred: Locations to predict GP at
+Optional inputs:
+- use_logx: If true, apply log transform to xpred before evaluating GP
+- use_logy: If true, apply exp transform after evaluating GP
+Returns vector of means of GP posterior at locations in xpred.
+"""
+function predict_mean(gp::AGP,  xpred::AA3, use_logx::Bool = true, use_logy::Bool = true )   where { AGP<:Fx_PosteriorType, T3<:Real, AA3<:AbstractArray{T3,1} }
+	gp_post = use_log_x ? gp(log.(xpred)) : gp(xpred)
+	m = mean.(gp_post)
+	if use_logy
+		m = exp.(m)
+	end
+	return m
 end
-
-function numerical_deriv(x::AA1, y::AA2 )   where { T1<:Real, AA1<:AbstractArray{T1,1}, T2<:Real, AA2<:AbstractArray{T2,1}  }
-	@assert length(x) == length(y)
-	dfluxdlnλ = zeros(size(y))
-	dfluxdlnλ[1] = (y[2]-y[1])/(x[2]-x[1])
-	dfluxdlnλ[2:end-1] .= (y[3:end].-y[1:end-2])./(x[3:end].-x[1:end-2]) 
-	dfluxdlnλ[end] = (y[end]-y[end-1])/(x[end]-x[end-1])
-	return dfluxdlnλ
-end
-
 
 function predict_deriv(gp::AGP, xpred::AA3; use_logx::Bool = true, use_logy::Bool = true )   where { AGP<:Fx_PosteriorType,
 				T3<:Real, AA3<:AbstractArray{T3,1}  }
@@ -244,7 +249,7 @@ function predict_mean_and_derivs(xobs::AA1, yobs::AA2, xpred::AA3; sigmasq_obs::
   return (mean=pred_mean, deriv=pred_deriv, deriv2=pred_deriv2)
 end
 
-function gp_marginal(xobs::AA, yobs::AA #, kernel::Function;
+function log_pdf_gp_posterior(xobs::AA, yobs::AA #, kernel::Function;
 			; sigmasq_obs::AA = 1e-16*ones(length(xobs)),
 			use_logx::Bool = true, use_logy::Bool = true, smooth_factor::Real = 1  )  where { T<:Real, AA<:AbstractArray{T,1} }
   	#kobs = make_kernel_data(xobs, kernel=kernel, sigmasq_obs=sigmasq_obs, sigmasq_cor=sigmasq_cor, rho=rho)
@@ -257,5 +262,3 @@ function gp_marginal(xobs::AA, yobs::AA #, kernel::Function;
 	return -logpdf(f_posterior(xobs_trans, sigmasq_obs_trans), yobs_trans)
 
 end
-
-end # module

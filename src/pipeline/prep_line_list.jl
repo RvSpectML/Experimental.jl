@@ -1,8 +1,8 @@
 
-""" prepare_line_list_pass1( linelist_fn, spectra, pipeline; Δv_to_avoid_tellurics, v_center_to_avoid_tellurics )
+""" prepare_line_list( linelist_fn, spectra, pipeline; Δv_to_avoid_tellurics, v_center_to_avoid_tellurics )
 """
-function prepare_line_list_pass1( linelist_fn::String, all_spectra::AbstractVector{SpecT}, pipeline::PipelinePlan; recalc::Bool = false,
-         Δv_to_avoid_tellurics::Real = 30e3, v_center_to_avoid_tellurics::Real = 0.0, verbose::Bool = false ) where { SpecT <: AbstractSpectra }
+function prepare_line_list( linelist_fn::String, all_spectra::AbstractVector{SpecT}, pipeline::PipelinePlan; recalc::Bool = false,
+         Δv_to_avoid_tellurics::Real = EchelleInstruments.default_Δv_to_avoid_tellurics, v_center_to_avoid_tellurics::Real = 0.0, verbose::Bool = false ) where { SpecT <: AbstractSpectra }
    @assert length(linelist_fn) >= 1
    @assert length(all_spectra) >= 1
    if need_to(pipeline,:read_line_list) || recalc
@@ -11,7 +11,6 @@ function prepare_line_list_pass1( linelist_fn::String, all_spectra::AbstractVect
       espresso_filename = joinpath(pkgdir(EchelleCCFs),"data","masks",linelist_fn)
       espresso_df = EchelleCCFs.read_linelist_espresso(espresso_filename)
       inst_module = get_inst_module(first(all_spectra).inst)
-      #line_list_df = EXPRES.filter_line_list(espresso_df,first(all_spectra).inst)
       line_list_df = inst_module.filter_line_list(espresso_df,first(all_spectra).inst)
       #println(line_list_df)
       if eltype(all_spectra) <: AnyEXPRES
@@ -26,14 +25,16 @@ function prepare_line_list_pass1( linelist_fn::String, all_spectra::AbstractVect
       if verbose println("# Removing lines with telluric contamination.")  end
       @assert !need_to(pipeline,:read_line_list)
       @assert !need_to(pipeline,:read_spectra)
+      line_list_no_tellurics_df = make_clean_line_list_from_tellurics(line_list_df, all_spectra,
+               Δv_to_avoid_tellurics = Δv_to_avoid_tellurics, v_center_to_avoid_tellurics=v_center_to_avoid_tellurics)
       if typeof(first(all_spectra).inst) <: AnyEXPRES
-         line_list_no_tellurics_df = EchelleInstruments.EXPRES.make_clean_line_list_from_tellurics_expres(line_list_df, all_spectra,
-                  Δv_to_avoid_tellurics = Δv_to_avoid_tellurics, v_center_to_avoid_tellurics=v_center_to_avoid_tellurics)
-               # RvSpectML.discard_tellurics(all_spectra)  # Keep, since individual line fits use the tellurics info data later
-               set_cache!(pipeline,:clean_line_list_tellurics,line_list_no_tellurics_df)
-         else
+         # RvSpectML.discard_tellurics(all_spectra)  # Keep, since individual line fits use the tellurics info data later
+      elseif typeof(first(all_spectra).inst) <: AnyNEID
+         # Nothing to do for NEID
+      else
          @warn("Removing lines with telluric contamination currently only works with EXPRES data.")
       end
+      set_cache!(pipeline,:clean_line_list_tellurics,line_list_no_tellurics_df)
       dont_need_to!(pipeline,:clean_line_list_tellurics);
     end
 

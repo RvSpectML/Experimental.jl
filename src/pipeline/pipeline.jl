@@ -2,7 +2,7 @@ include("extract_orders.jl")
 export extract_orders
 
 include("prep_line_list.jl")
-export prepare_line_list_pass1
+export prepare_line_list
 
 include("ccf_total.jl")
 export ccf_total

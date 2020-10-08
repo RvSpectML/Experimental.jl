@@ -35,7 +35,7 @@ TemporalGPs = "e155a3c4-0841-43e1-8b83-a0e4f03cc18f"
 [compat]
 CSV = "0.7"
 DataFrames = "0.21"
-Distributions = "0.23"
+Distributions = "0.23, 0.24"
 EchelleCCFs = "0.1"
 EchelleInstruments = "0.1"
 PDMats = "0.10"

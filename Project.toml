@@ -33,7 +33,7 @@ Stheno = "8188c328-b5d6-583d-959b-9690869a5511"
 TemporalGPs = "e155a3c4-0841-43e1-8b83-a0e4f03cc18f"
 
 [compat]
-CSV = "0.7"
+CSV = "0.7, 0.8"
 DataFrames = "0.21"
 Distributions = "0.23"
 EchelleCCFs = "0.1"
